@@ -50,7 +50,7 @@ void Session::handle_read(const boost::system::error_code& error, size_t bytes_t
 			b_head_parse = true;
 			return;
 		}
-		memcpy()
+		memcpy(_recv_msg_node ->_data + _recv_msg_node->_total_len , _data + copy_len , data_len);
 	}
 	
 }
