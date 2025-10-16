@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="AsyncServer/AsyncServer.vcxproj" Id="59eab6a0-8338-481f-8d64-a161f652d9cb" />
+</Solution>
