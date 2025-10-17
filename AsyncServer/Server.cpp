@@ -22,7 +22,6 @@ void Server::handle_accept(std::shared_ptr<Session> new_session, const boost::sy
 		_sessions.insert(make_pair(new_session->GetUuid(), new_session));
 	}
 	else {
-
 	}
 	start_accept();
 }

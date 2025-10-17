@@ -3,11 +3,12 @@
 #include "Session.h"
 #include "Server.h"
 
+using namespace std;
+
 int main() {
 	try {
 		boost::asio::io_context io_context;
-		using namespace std;
-		Server s(io_context , 10086);
+		Server s(io_context, 10086);
 		io_context.run();
 	}
 	catch (std::exception& e) {
