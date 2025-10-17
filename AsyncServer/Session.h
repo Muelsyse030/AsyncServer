@@ -6,6 +6,7 @@
 #include <queue>
 #include <mutex>
 #include <memory>
+#include "json/json.h"
 
 #define MAX_BODY_LENGTH 2048
 #define HEADER_LENGTH 4

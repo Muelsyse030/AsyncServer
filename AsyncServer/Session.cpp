@@ -51,10 +51,32 @@ void Session::DoReadBody(size_t body_length) {
             if (!ec) {
                 string msg(_read_buffer.begin(), _read_buffer.end());
                 cout << "Server received message: " << msg << endl;
+                //反序列化json
+				Json::Value root;
+				Json::CharReaderBuilder readerBuilder;
+                JSONCPP_STRING errs;
+				std::istringstream s(msg);
+                if (!Json::parseFromStream(readerBuilder, s, &root, &errs)) {
+                    cerr << "JSON parse error: " << errs << endl;
+                    HandleError(boost::asio::error::invalid_argument);
+                    return;
+                }
+                string type = root.get("type", "unknown").asString();
+                string content = root.get("content", "").asString();
+                cout << "Parsed JSON: type=" << type << ", content=" << content << endl;
+                //构造json响应
+                Json::Value reply;
+                reply["status"] = "ok";
+                reply["echo_type"] = type;
+                reply["echo_content"] = content;
+                reply["uuid"] = _uuid;
 
-                // 回显消息（示例）
-                auto echo_msg = make_shared<MsgNode>(msg.data(), msg.size());
-                Send(echo_msg);
+                Json::StreamWriterBuilder writer;
+                string response = Json::writeString(writer, reply);
+                //打包发送
+
+                auto reply_msg = make_shared<MsgNode>(response.data(), response.size());
+                Send(reply_msg);
 
                 DoReadHeader();  // 继续下一条
             }
