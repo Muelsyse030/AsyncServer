@@ -4,96 +4,94 @@
 using namespace std;
 
 void Session::Start() {
-	memset(_data, 0 ,max_length);
-	_socket.async_read_some(boost::asio::buffer(_data, max_length),
-		std::bind(&Session::handle_read, this, std::placeholders::_1, std::placeholders::_2,shared_from_this()));
+	cout << "New Session Start:" << endl;
+	handle_read_head();
 }
 
-void Session::handle_read(const boost::system::error_code& error, size_t bytes_transferred , std::shared_ptr<Session> _self_shared) {
-	if (b_head_parse) {
-		int copy_len = 0;
-		while (bytes_transferred > 0) {
-			if (b_head_parse) {
-				if (bytes_transferred + _recv_head_node->_cur_len < HEAD_LENGTH) {
-					memcpy(_recv_head_node->_data + _recv_head_node->_cur_len, _data + copy_len, bytes_transferred);
-					_recv_head_node->_cur_len += bytes_transferred;
-					memset(_data, 0, MAX_LENGTH);
-					_socket.async_read_some(boost::asio::buffer(_data, max_length),
-						[this, _self_shared](const boost::system::error_code& error, std::size_t bytes_tansferred) {
-							handle_read(error, bytes_tansferred, _self_shared);
-						});
+void Session::handle_read_head() {
+	auto self(shared_from_this());
+	boost::asio::async_read(_socket,
+		boost::asio::buffer(&_msg_len , HEAD_LEN),
+		[this , self](const boost::system::error_code& ec , std::size_t) {
+			if (!ec) {
+				_msg_len = ntohl(_msg_len);
+				if (_msg_len > 10 * 1024 * 1024) {
+					std::cerr << "Message too large, closing connection." << std::endl;
+					_server->ClearSession(_uuid);
 					return;
+					
 				}
+				handle_read_body(_msg_len);
 			}
-		}
-		int head_remain = HEAD_LENGTH - _recv_head_node->_cur_len;
-		memcpy(_recv_head_node->_data + _recv_head_node->_cur_len, _data + copy_len , head_remain);
-		copy_len += head_remain;
-		bytes_transferred -= head_remain;
-		short data_len = 0;
-		memcpy(&data_len, _recv_head_node->_data, HEAD_LENGTH);
-		cout << "data_len is:" << data_len << endl;
-		if (data_len > MAX_LENGTH) {
-			std::cout << "invalid data length is" << data_len << std::endl;
-			_server->ClearSession(_uuid);
-			return;
-		}
-		_recv_msg_node = std::make_shared<MsgNode>(data_len);
-		if (bytes_transferred < data_len) {
-			memcpy(_recv_msg_node->_data + _recv_msg_node->_cur_len, _data + copy_len, bytes_transferred);
-			_recv_msg_node->_cur_len += bytes_transferred;
-			memset(_data, 0, MAX_LENGTH);
-			_socket.async_read_some(boost::asio::buffer(_data, max_length),
-				[this, _self_shared](const boost::system::error_code& error, std::size_t bytes_tansferred) {
-					handle_read(error, bytes_tansferred, _self_shared);
-				});
-			b_head_parse = true;
-			return;
-		}
-		memcpy(_recv_msg_node ->_data + _recv_msg_node->_total_len , _data + copy_len , data_len);
-	}
-	
+			else {
+				headle_error(ec);
+			}
+		});
 }
 
-void Session::handle_write(const boost::system::error_code& error , std::shared_ptr<Session> _self_shared) {
-	if (!error) {
-		std::lock_guard <std::mutex> lock(_send_lock);
-		_send_queue.pop();
-		if (!_send_queue.empty()) {
-			auto& msgnode = _send_queue.front();
-			boost::asio::async_write(_socket, boost::asio::buffer(msgnode->_data, msgnode->max_len),
-				bind(&Session::handle_write, this, std::placeholders::_1, _self_shared));
-		}
-	}
-	else {
-		std::cout << "handle write failed , error is" << error.what() << std::endl;
-		_server->ClearSession(_uuid);
-	}
+void Session::handle_read_body(size_t body_length) {
+	auto self(shared_from_this());
+	read_buffer.resize(body_length);
+	boost::asio::async_read(_socket,
+		boost::asio::buffer(read_buffer.data(), body_length),
+		[this, self](const boost::system::error_code& ec , size_t){
+			if (!ec) {
+				string msg(read_buffer.begin(), read_buffer.end());
+				std::cout << "Server received full message: " << msg << std::endl;
+				send(msg);
+				handle_read_head();
+			}else{
+				headle_error(ec);
+			}
+		});
+}
+
+void Session::handle_write() {
+	auto self(shared_from_this());
+	std::string& msg = _send_queue.front();
+
+	boost::asio::async_write(_socket,
+		boost::asio::buffer(msg.data(), msg.size()),
+		[this , self](const boost::system::error_code& ec , size_t){
+			if (!ec) {
+				std::lock_guard<std::mutex> lock(_send_lock);
+				_send_queue.pop();
+				if (!_send_queue.empty())
+					handle_write();
+			}
+			else {
+				headle_error(ec);
+			}
+		});
 }
 
 std::string& Session::GetUuid() {
 	return _uuid;
 }
 
-std::queue<std::shared_ptr<MsgNode>>& Session::GetSendQueue() {
-	return _send_queue;
-}
-
 tcp::socket& Session::Socket() {
 	return _socket;
 }
 
-void Session::send(char* msg, int max_length) {
-	bool pending = false;
-	std::lock_guard<std::mutex> lock(_send_lock);
-	if (_send_queue.size() > 0) {
-		pending = true;
+void Session::send(const std::string& msg) {
+
+	uint32_t len = htonl(static_cast<uint32_t>(msg.size()));
+
+	string packet;
+	packet.resize(4 + msg.size());
+	memcpy(packet.data(), &len , 4);
+	memcpy(packet.data() + 4, msg.data(), msg.size());
+	bool is_writing = false;{
+		std::lock_guard<std::mutex> lock(_send_lock);
+		is_writing = !_send_queue.empty();
+		_send_queue.push(std::move(packet));
 	}
-	_send_queue.push(std::make_shared<MsgNode>(msg , max_length));
-	if (pending) {
-		return;
+	if (!is_writing) {
+		handle_write();
 	}
-	boost::asio::async_write(_socket, boost::asio::buffer(msg, max_length),
-		bind(&Session::handle_write, this, std::placeholders::_1, shared_from_this()));
+}
+void Session::headle_error(const boost::system::error_code& ec) {
+	std::cout << "session error is:" << ec.message() << std::endl;
+	_server->ClearSession(_uuid);
 }
 

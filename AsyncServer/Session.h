@@ -22,18 +22,24 @@ public:
 	tcp::socket& Socket();
 	void Start();
 	std::string& GetUuid();
-	void send(char* data, int max_length);
+	void send(const string& msg);
 	std::queue<std::shared_ptr<MsgNode>>& GetSendQueue();
 
 private:
-	void handle_read(const boost::system::error_code& error , size_t bytes_transferred , std::shared_ptr<Session> _self_shered);
-	void handle_write(const boost::system::error_code& error, std::shared_ptr<Session> _self_shared);
+	void handle_read_head();
+	void handle_read_body(size_t body_length);
+	void handle_write();
+	void headle_error(const boost::system::error_code& ec);
+
 	tcp::socket _socket;
-	enum {max_length = 1024};
+	enum {max_length = 1024 };
+	enum {HEAD_LEN = 4};
 	char _data[max_length];
+	std::vector<char> read_buffer;
+	uint32_t _msg_len = 0;
 	Server* _server;
 	std::string _uuid;
-	std::queue<std::shared_ptr<MsgNode>> _send_queue;
+	std::queue <std::string> _send_queue;
 	std::mutex _send_lock;
 	std::shared_ptr<MsgNode> _recv_msg_node;
 	bool b_head_parse = false;
