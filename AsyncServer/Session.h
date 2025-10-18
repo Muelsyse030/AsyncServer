@@ -7,7 +7,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include "protocol.h"
 #include "MsgNode.h"
-#include <memory> 
+#include <memory>
 
 using boost::asio::ip::tcp;
 
@@ -26,7 +26,7 @@ private:
 	void DoReadBody();
 	void DoWrite();
 	void HandleError(const boost::system::error_code& ec);
-	
+
 	tcp::socket _socket;
 	Server* _server;
 	std::string _uuid;
