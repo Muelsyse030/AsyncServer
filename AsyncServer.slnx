@@ -3,5 +3,6 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Project Path="../SyncClient/SyncClient/SyncClient.vcxproj" Id="bc22482f-16d6-49fa-8126-64252ec66400" />
   <Project Path="AsyncServer/AsyncServer.vcxproj" Id="59eab6a0-8338-481f-8d64-a161f652d9cb" />
 </Solution>
