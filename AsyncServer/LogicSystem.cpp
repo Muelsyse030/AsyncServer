@@ -21,7 +21,7 @@ LogicSystem::~LogicSystem() {
 }
 
 void LogicSystem::RegisterCallBack() {
-	// 使用 lambda 避免类型推断问题
+	
 	_fun_callback[MSG_HELLO_WORD] = [this](std::shared_ptr<Session> session, uint16_t msg_id, const std::shared_ptr<MsgNode>& msg_data) {
 		this->HelloWordCallBack(session, msg_id, msg_data);
 		};
@@ -36,7 +36,6 @@ void LogicSystem::PostMsgToQueue(shared_ptr<LogicNode> msg) {
 	cv.notify_one();
 }
 
-// 在逻辑层处理 JSON 解析
 void LogicSystem::HelloWordCallBack(std::shared_ptr<Session> session, const std::uint16_t msg_id, const std::shared_ptr<MsgNode>& msg_data) {
 	try {
 		// 提取消息体数据（跳过消息头）
